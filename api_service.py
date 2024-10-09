@@ -76,10 +76,7 @@ class ApiService(object):
         server_thread.start()
         print(f"api service({socket_path}) is listening...")
         self.stop_event = asyncio.Event()
-        try:
-            await self.stop_event.wait()
-        except (KeyboardInterrupt, SystemExit):
-            pass
+        await self.stop_event.wait()
         print(f"api service({socket_path}) stopped!")
 
     def stop(self) -> None:
@@ -87,7 +84,10 @@ class ApiService(object):
         self.stop_event.set()
 
     def run(self, args: Dict) -> None:
-        asyncio.run(self.run_app(args))
+        try:
+            asyncio.run(self.run_app(args))
+        except (KeyboardInterrupt, SystemExit):
+            print("api service stopped!")
 
 if __name__ == "__main__":
     args = {
