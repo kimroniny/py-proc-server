@@ -1,10 +1,10 @@
 from __future__ import annotations
 from typing import List, Dict, Any, TypeAlias
 from server.response import Response
-
+from abc import ABC, abstractmethod
 ResponseContent: TypeAlias = str | bytes
 
-class Handler:
+class Handler(ABC):
     def __init__(self, url: str, method: str, arguments: Dict[str, Any]):
         self.__url = url
         self.__method = method
@@ -33,8 +33,10 @@ class Handler:
     def initialize(self, *args, **kwargs):
         pass
 
+    @abstractmethod
     def get(self):
-        pass
+        raise NotImplementedError
 
+    @abstractmethod
     def post(self):
-        pass
+        raise NotImplementedError
