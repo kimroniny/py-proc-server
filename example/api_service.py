@@ -8,7 +8,7 @@ from typing import Dict
 from server.server import Server, Handler
 from loguru import logger
 from typing import Dict
-from application_response import StandardResponse
+from example.application_response import StandardResponse
 
 logger.remove()  # Remove the default logger
 logger.add(sys.stderr, level="INFO")  # Set logger to only show INFO level logs
@@ -16,14 +16,14 @@ logger.add(sys.stderr, level="INFO")  # Set logger to only show INFO level logs
 
 class MyHandler(Handler):
     @classmethod
-    def routes(cls) -> Dict[str, str]:
+    def routers(cls) -> Dict[str, str]:
         return {
             r'/': cls.hello,
         }
 
     def __get_func(self) -> callable:
         path = self.get_url()
-        routers = self.routes()
+        routers = self.routers()
         callfunc = routers.get(path, None)
         if callfunc is None:
             raise Exception("invalid uri:'{}'".format(path))
@@ -60,7 +60,7 @@ class ApiService(object):
         ]
         routes = []
         for handler in handlers:
-            routes += [(route, handler, args) for route in handler.routes().keys()]
+            routes += [(route, handler, args) for route in handler.routers().keys()]
         return Server(routes, max_workers=self.max_workers)
 
     async def run_app(self, args: Dict = None):

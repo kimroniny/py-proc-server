@@ -1,8 +1,6 @@
 import threading
 from client.client import Client
 
-
-
 class ClientSimulator:
     def __init__(self, socket_path, num_clients):
         self.socket_path = socket_path
@@ -25,6 +23,6 @@ class ClientSimulator:
 
 if __name__ == "__main__":
     socket_path = "/tmp/server_socket"
-    num_clients = 10000  # 模拟100个客户端
+    num_clients = 10  # 模拟100个客户端
     simulator = ClientSimulator(socket_path, num_clients)
     simulator.run()
