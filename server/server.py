@@ -29,7 +29,7 @@ class Server:
             logger.error(f"socket path {socket_path} already exists, remove it")
             return False
         self.server = Listener(family='AF_UNIX', address=socket_path)
-        logger.info(f"服务器正在监听 {socket_path}")
+        logger.debug(f"服务器正在监听 {socket_path}")
         return True
 
     def listen(self, socket_path: str, stop_event: threading.Event):
