@@ -4,7 +4,7 @@ import sys
 import asyncio
 import threading
 import time
-from typing import Dict
+from typing import Dict, Optional
 from server.server import Server, Handler
 from loguru import logger
 from typing import Dict
@@ -59,9 +59,10 @@ class MyHandler(Handler):
         return f'{(end - start)*1000:.2f}ms'
 
 class ApiService(object):
-    def __init__(self, socket_path: str, max_workers: int) -> None:
+    def __init__(self, socket_path: str, max_workers: Optional[int] = None, max_conns: Optional[int] = None) -> None:
         self.socket_path = socket_path
         self.max_workers = max_workers
+        self.max_conns = max_conns
         self.stop_event: threading.Event = None
 
     def make_server(self, args: Dict = None) -> Server:
@@ -73,14 +74,14 @@ class ApiService(object):
         routes = []
         for handler in handlers:
             routes += [(route, handler, args) for route in handler.routers().keys()]
-        return Server(routes, max_workers=self.max_workers)
+        return Server(routes, max_workers=self.max_workers, max_conns=self.max_conns)
 
     async def run_app(self, args: Dict = None):
         if args is None:
             args = {}
         server = self.make_server(args)
         self.stop_event = threading.Event()
-        server_thread = threading.Thread(target=server.listen, args=(self.socket_path, self.stop_event))
+        server_thread = threading.Thread(target=server.start, args=(self.socket_path, self.stop_event))
         server_thread.daemon = True
         server_thread.start()
         logger.debug(f"api service({self.socket_path}) is listening...")
