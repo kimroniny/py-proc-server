@@ -1,6 +1,7 @@
 import time
 import threading
 import sys
+import multiprocessing
 from typing import List
 from loguru import logger
 from client.client import Client
@@ -9,11 +10,14 @@ from multiprocessing.synchronize import Event as ProcessEventType
 from multiprocessing import Process, Event as ProcessEvent
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
-NUM_API_SERVICES = 1000
-NUM_WORKERS_PER_API_SERVICE = 100
+multiprocessing.set_start_method('fork')
+
+NUM_API_SERVICES = 200
+NUM_WORKERS_PER_API_SERVICE = 50
 NUM_CLIENTS = NUM_API_SERVICES
-NUM_REQUESTS_PER_CLIENT = 50
-NUM_THREADS_PER_CLIENT = 1000
+NUM_REQUESTS_PER_CLIENT = 100    
+NUM_THREADS_PER_CLIENT = 50
+CALC_TARGET = 1000
 
 
 logger.remove()  # Remove the default logger
@@ -54,14 +58,15 @@ def send_requests(socket_paths: List[str]):
     
     def single_client_to_single_api_service(client: Client):
         for i in range(NUM_REQUESTS_PER_CLIENT):
-            resp = client.post('/calc', {'target': 100000})
+            resp = client.post('/calc', {'target': CALC_TARGET})
+            time.sleep(0.01)
             if resp.code != 200:
                 logger.error(resp.err)
             else:
-                # logger.info(resp.msg)
+                logger.debug(resp.msg)
                 pass
 
-    def send_requests_to_single_api_service(client_id: int):
+    def send_requests_from_single_client(client_id: int):
         clients = []
         for socket_path in socket_paths:
             client = Client(socket_path)
@@ -77,8 +82,8 @@ def send_requests(socket_paths: List[str]):
         print(f"time taken({client_id}): {end_time - start_time}")
 
     processes = []
-    for idx, _ in enumerate(socket_paths):
-        p = Process(target=send_requests_to_single_api_service, args=(idx,))
+    for idx in range(NUM_CLIENTS):
+        p = Process(target=send_requests_from_single_client, args=(idx,))
         p.start()
         processes.append(p)
 
