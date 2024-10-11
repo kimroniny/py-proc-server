@@ -15,7 +15,6 @@ from server.response import Response
 from server.handler import Handler
 
 
-
 Route: TypeAlias = Tuple[str, Handler, Dict[str, Any]]
 
 class Server:
