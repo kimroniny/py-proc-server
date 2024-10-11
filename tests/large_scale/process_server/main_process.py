@@ -1,22 +1,23 @@
 import time
 import threading
 import sys
+import traceback
 import multiprocessing
 from typing import List
 from loguru import logger
 from client.client import Client
-from tests.large_scale.api_service import ApiService
+from tests.large_scale.process_server.api_service import ApiService
 from multiprocessing.synchronize import Event as ProcessEventType
 from multiprocessing import Process, Event as ProcessEvent
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 multiprocessing.set_start_method('fork')
 
-NUM_API_SERVICES = 200
-NUM_WORKERS_PER_API_SERVICE = 50
+NUM_API_SERVICES = 2
+NUM_WORKERS_PER_API_SERVICE = 25 
 NUM_CLIENTS = NUM_API_SERVICES
-NUM_REQUESTS_PER_CLIENT = 100    
-NUM_THREADS_PER_CLIENT = 50
+NUM_REQUESTS_PER_CLIENT = 10
+NUM_THREADS_PER_CLIENT = 25
 CALC_TARGET = 1000
 
 
@@ -57,14 +58,21 @@ def start_api_services():
 def send_requests(socket_paths: List[str]):
     
     def single_client_to_single_api_service(client: Client):
-        for i in range(NUM_REQUESTS_PER_CLIENT):
-            resp = client.post('/calc', {'target': CALC_TARGET})
-            time.sleep(0.01)
-            if resp.code != 200:
-                logger.error(resp.err)
-            else:
-                logger.debug(resp.msg)
-                pass
+        cnt = 0
+        try:
+            for i in range(NUM_REQUESTS_PER_CLIENT):
+                cnt += 1
+                resp = client.post('/calc', {'target': CALC_TARGET})
+                time.sleep(0.01)
+                if resp.code != 200:
+                    logger.error(resp.err)
+                else:
+                    logger.debug(resp.msg)
+                    print(resp.msg)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+
+        print(f"cnt: {cnt}")
 
     def send_requests_from_single_client(client_id: int):
         clients = []
@@ -93,6 +101,7 @@ def send_requests(socket_paths: List[str]):
 
 if __name__ == "__main__":
     processes, process_events, socket_paths = start_api_services()
+    time.sleep(1)
     
     send_requests(socket_paths)
 
