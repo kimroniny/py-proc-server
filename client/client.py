@@ -1,6 +1,7 @@
 
 from server.response import Response
 from typing import Dict, Any
+from loguru import logger
 from multiprocessing.connection import Client as MClient, Connection
 
 class Client:
@@ -26,6 +27,16 @@ class Client:
         # print(f"收到服务器响应, code: {response.code}, msg: {response.msg}, err: {response.err}")
         return response
     
+    def __close(self, client: Connection):
+        try:
+            client.send("close")
+            ack = client.recv()
+            assert ack == "ok"
+            logger.info(f"client closed, client: {client.fileno()}")
+            client.close()
+        except Exception as e:
+            logger.error(f"Error closing client: {e}")
+
     def send(self, url: str, method: str, params: Dict[str, Any]) -> Response:
         client: Connection = MClient(self.socket_path)
         message = {
@@ -37,7 +48,7 @@ class Client:
         response = client.recv()
         response = Response.from_str(response)
         # print(f"收到服务器响应, code: {response.code}, msg: {response.msg}, err: {response.err}")
-        client.close()
+        self.__close(client)
         return response
     
     # def __del__(self):
