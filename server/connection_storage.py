@@ -34,7 +34,8 @@ class ConnectionStorage:
                     return
                 self.storage.remove(conn)
                 del self.exist_in_queue[conn]
-                conn.close()
+                if not conn.closed:
+                    conn.close()
             except Exception as e:
                 logger.error(f"Error removing and closing connection in ConnectionStorage: {e}")
         
@@ -47,10 +48,14 @@ class ConnectionStorage:
             with self.storage_lock:
                 if conn in self.storage and not conn.closed:
                     print(f"connection is polled: {conn.poll()}, closed: {conn.closed}, fileno: {conn.fileno()}")
-                    msg = conn.recv()
+                    try:
+                        msg = conn.recv()
                     # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
-                    self.exist_in_queue[conn] = False 
-                    return conn, msg
+                        self.exist_in_queue[conn] = False 
+                        return conn, msg
+                    except Exception as e:
+                        logger.error(f"Error receiving message from connection in ConnectionStorage: {traceback.format_exc()}; \n connection fileno: {conn.fileno()}")
+                        self.remove(conn)
 
     def __close_conns(self):
         with self.storage_lock:

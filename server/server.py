@@ -78,6 +78,7 @@ class Server:
 
             if data == 'close':
                 conn.send("ok")
+                logger.info(f"connection closed(fileno: {conn.fileno()})!")
                 self.connection_storage.remove(conn)
                 return
 
