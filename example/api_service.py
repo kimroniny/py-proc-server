@@ -30,6 +30,12 @@ class MyHandler(Handler):
         return callfunc
 
     def get(self):
+        self.__call_func()
+    
+    def post(self):
+        self.__call_func()
+
+    def __call_func(self):
         resp = StandardResponse()
         try:
             callfunc: callable = self.__get_func()
