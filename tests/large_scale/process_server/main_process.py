@@ -13,10 +13,11 @@ from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 multiprocessing.set_start_method('fork')
 
-NUM_API_SERVICES = 2
+NUM_API_SERVICES = 20
 NUM_WORKERS_PER_API_SERVICE = 25 
 NUM_CLIENTS = NUM_API_SERVICES
-NUM_REQUESTS_PER_CLIENT = 2
+# NUM_CLIENTS = 1
+NUM_REQUESTS_PER_CLIENT = 500
 NUM_THREADS_PER_CLIENT = 25
 CALC_TARGET = 1000
 
@@ -63,21 +64,21 @@ def send_requests(socket_paths: List[str]):
             for i in range(NUM_REQUESTS_PER_CLIENT):
                 cnt += 1
                 resp = client.post('/calc', {'target': CALC_TARGET})
-                time.sleep(0.01)
+                # time.sleep(0.001)
                 if resp.code != 200:
                     logger.error(resp.err)
                 else:
                     logger.debug(resp.msg)
-                    print(resp.msg)
+                    # print(resp.msg)
         except Exception as e:
             logger.error(traceback.format_exc())
 
-        print(f"cnt: {cnt}")
+        # print(f"cnt: {cnt}")
 
     def send_requests_from_single_client(client_id: int):
         clients = []
         for socket_path in socket_paths:
-            client = Client(socket_path)
+            client = Client(socket_path, reuse_client=True)
             clients.append(client)
 
         start_time = time.time()
@@ -91,7 +92,7 @@ def send_requests(socket_paths: List[str]):
 
     processes = []
     for idx in range(NUM_CLIENTS):
-        p = Process(target=send_requests_from_single_client, args=(idx,))
+        p = Process(target=send_requests_from_single_client, args=(idx,), name=f"process-{idx}")
         p.start()
         processes.append(p)
 
