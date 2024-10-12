@@ -14,10 +14,10 @@ from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 multiprocessing.set_start_method('fork')
 
-NUM_API_SERVICES = 2
+NUM_API_SERVICES = 20
 # NUM_WORKERS_PER_API_SERVICE = 25 
 NUM_CLIENTS = NUM_API_SERVICES
-NUM_REQUESTS_PER_CLIENT = 10
+NUM_REQUESTS_PER_CLIENT = 1000
 NUM_THREADS_PER_CLIENT = 25
 CALC_TARGET = 1000
 
@@ -67,7 +67,7 @@ def send_requests(api_ports: List[int]):
         for i in range(NUM_REQUESTS_PER_CLIENT):
             # print(f"send request {i} to {url}")
             resp = session.get(url, params={'msg': CALC_TARGET})
-            time.sleep(0.01)
+            # time.sleep(0.01)
             logger.debug(resp.text)
 
     def send_requests_from_single_client(client_id: int):
