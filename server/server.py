@@ -41,6 +41,7 @@ class Server:
             while not stop_event.is_set():
                 try:
                     c = self.server.accept()
+                    logger.debug(f"accept connection: {c.fileno()}")
                 except OSError:
                     continue
                 ret = self.connection_storage.add(c)
@@ -77,9 +78,28 @@ class Server:
             logger.debug(f"recv data: {data}")
 
             if data == 'close':
-                conn.send("ok")
-                logger.info(f"connection closed(fileno: {conn.fileno()})!")
-                self.connection_storage.remove(conn)
+                """
+                方案1 "向客户端发送响应" 和 "删除并关闭服务端链接" 未绑定为原子操作
+                由于"发送响应"和"删除并关闭服务端链接"未能保证原子性, 所以存在客户端已经关闭链接, 但是服务端链接还未删除并关闭的情况
+                又因为客户端在关闭链接时会向服务端发送一个空消息, 就导致 ConnectionStorage 中的 poll() 会将该链接放入 available_conns 队列中
+                然后服务端从 available_conns 中读取到这个空消息, 就会对该链接进行处理, 就会导致错误
+                所以如果采用方案1, 就要在 ConnectionStorage 中需要对客户端关闭链接的情况进行特殊处理, 也就是捕获 EOFError 异常
+                
+                # fileno = conn.fileno()
+                # conn.send(f"ok#fileno:{conn.fileno()}")
+                # logger.info(f"ignore before connection closed(fileno: {fileno})!")
+                # self.connection_storage.remove(conn)
+                # logger.info(f"connection closed(fileno: {fileno})!")
+                """
+
+                """
+                方案2 "向客户端发送响应" 和 "删除并关闭服务端链接" 绑定为原子操作
+                由于二者已经绑定为原子操作, 所以客户端关闭连接时, 服务端也会删除并关闭链接
+                此时, ConnectionStorage 中的 poll() 在遍历 storage 集合时, 不会遍历客户端已经关闭的链接
+                """
+                fileno = conn.fileno()
+                self.connection_storage.close_and_remove(conn)
+                logger.debug(f"connection closed(fileno: {fileno})!")
                 return
 
             response = self.__process_data(data)
