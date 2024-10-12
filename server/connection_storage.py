@@ -3,7 +3,7 @@ import threading
 import time
 import traceback
 from loguru import logger
-from multiprocessing.connection import Connection
+from multiprocessing.connection import Connection, wait
 from typing import Dict, Set, Any, Tuple
 
 class ConnectionStorage:
@@ -32,6 +32,20 @@ class ConnectionStorage:
             try:
                 if conn not in self.storage:
                     return
+                
+                self.storage.remove(conn)
+                del self.exist_in_queue[conn]
+                if not conn.closed:
+                    conn.close()
+            except Exception as e:
+                logger.error(f"Error removing and closing connection in ConnectionStorage: {e}")
+
+    def close_and_remove(self, conn: Connection):
+        with self.storage_lock:
+            try:
+                if conn not in self.storage:
+                    return
+                conn.send(f"ok#fileno:{conn.fileno()}")
                 self.storage.remove(conn)
                 del self.exist_in_queue[conn]
                 if not conn.closed:
@@ -47,14 +61,20 @@ class ConnectionStorage:
             conn: Connection = self.available_conns.get()
             with self.storage_lock:
                 if conn in self.storage and not conn.closed:
-                    print(f"connection is polled: {conn.poll()}, closed: {conn.closed}, fileno: {conn.fileno()}")
+                    logger.debug(f"connection is polled: {conn.poll()}, available obj: {wait([conn])}, closed: {conn.closed}, fileno: {conn.fileno()}")
                     try:
+                        logger.debug("waiting recv...")
                         msg = conn.recv()
-                    # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
+                        # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
                         self.exist_in_queue[conn] = False 
+                        logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
                         return conn, msg
+                    except EOFError:
+                        # 客户端关闭连接时, conn.poll() 也会收到通知, 但是消息为空, 此时只能通过捕获 EOFError 异常来判断
+                        logger.warning(f"EOFError receiving message from connection(fileno: {conn.fileno()}) in ConnectionStorage")
+                        self.remove(conn)
                     except Exception as e:
-                        logger.error(f"Error receiving message from connection in ConnectionStorage: {traceback.format_exc()}; \n connection fileno: {conn.fileno()}")
+                        logger.error(f"Error receiving message from connection(fileno: {conn.fileno()}) in ConnectionStorage: {traceback.format_exc()}")
                         self.remove(conn)
 
     def __close_conns(self):
@@ -75,6 +95,7 @@ class ConnectionStorage:
                 with self.storage_lock:
                     for conn in self.storage:
                         if not self.exist_in_queue.get(conn, False) and conn.poll(): # 先判断是否在队列中, 再判断是否可读
+                            logger.debug(f"connection is polled: {conn.poll()}, fileno: {conn.fileno()}, exist in queue: {self.exist_in_queue}")
                             self.available_conns.put(conn)
                             self.exist_in_queue[conn] = True
                 time.sleep(0)
