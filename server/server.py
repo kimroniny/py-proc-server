@@ -53,7 +53,10 @@ class Server:
                     logger.warning("connection storage is full, refuse and close the connection")
                     c.close()
                     continue
-                self.executor.submit(self.__handle, c)
+                elif ret == 0:
+                    continue
+                else:
+                    raise Exception(f"unknown return value when add connection storage: {ret}")
         except (KeyboardInterrupt, SystemExit):
             self.server.close()
             self.executor.shutdown(wait=True)  # 关闭线程池
