@@ -4,7 +4,7 @@ import time
 import traceback
 from loguru import logger
 from multiprocessing.connection import Connection, wait
-from typing import Dict, Set, Any, Tuple
+from typing import Dict, Set, Any, Tuple, Optional
 
 class ConnectionStorage:
     def __init__(self, max_size: int=100):
@@ -56,9 +56,13 @@ class ConnectionStorage:
     def init_stop_flag(self, stop_flag: threading.Event):
         self.stop_flag = stop_flag
 
-    def get_msg_from_available_conn_queue(self) -> Tuple[Connection, Any]:
-        while True:
-            conn: Connection = self.available_conns.get()
+    def get_msg_from_available_conn_queue(self, timeout: float=0.1) -> Optional[Tuple[Connection, Any]]:
+        while not self.stop_flag.is_set():
+            try:
+                conn: Connection = self.available_conns.get(timeout=timeout)
+            except queue.Empty:
+                return None
+
             with self.storage_lock:
                 if conn in self.storage and not conn.closed:
                     logger.debug(f"connection is polled: {conn.poll()}, available obj: {wait([conn])}, closed: {conn.closed}, fileno: {conn.fileno()}")
@@ -76,6 +80,9 @@ class ConnectionStorage:
                     except Exception as e:
                         logger.error(f"Error receiving message from connection(fileno: {conn.fileno()}) in ConnectionStorage: {traceback.format_exc()}")
                         self.remove(conn)
+                else:
+                    continue
+        return None
 
     def __close_conns(self):
         with self.storage_lock:
