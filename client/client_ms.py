@@ -8,7 +8,7 @@ from client.client import Client
 class ClientMS:
     def __init__(self, socket_paths: List[str]):
         self.socket_paths = socket_paths
-        self.__clients: List[Client] = [Client(socket_path) for socket_path in self.socket_paths]
+        self.__clients: List[Client] = [Client(socket_path, reuse_client=True) for socket_path in self.socket_paths]
 
     def get(self, url: str, params: Dict[str, Any]) -> Response:
         return self.send(url, "GET", params)
