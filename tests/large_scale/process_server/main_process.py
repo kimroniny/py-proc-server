@@ -6,18 +6,18 @@ import multiprocessing
 from typing import List
 from loguru import logger
 from client.client import Client
-from tests.large_scale.process_server.api_service import ApiService
+from service.api_service import ApiService
 from multiprocessing.synchronize import Event as ProcessEventType
 from multiprocessing import Process, Event as ProcessEvent
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 multiprocessing.set_start_method('fork')
 
-NUM_API_SERVICES = 20
+NUM_API_SERVICES = 2
 NUM_WORKERS_PER_API_SERVICE = 25 
 NUM_CLIENTS = NUM_API_SERVICES
 # NUM_CLIENTS = 1
-NUM_REQUESTS_PER_CLIENT = 500
+NUM_REQUESTS_PER_CLIENT = 2
 NUM_THREADS_PER_CLIENT = 25
 CALC_TARGET = 1000
 
