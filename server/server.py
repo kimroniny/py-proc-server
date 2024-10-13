@@ -73,8 +73,8 @@ class Server:
             stop_event.set()
 
     def __handle(self, item: Tuple[Connection, Any]):
-        conn, data = item
         try:
+            conn, data = item
             logger.debug(f"recv data: {data}")
 
             if data == 'close':
