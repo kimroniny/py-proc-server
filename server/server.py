@@ -69,8 +69,9 @@ class Server:
         thread_poll.start()
         try:
             while not stop_event.is_set():
-                item: Tuple[Connection, Any] = self.connection_storage.get_msg_from_available_conn_queue()
-                self.executor.submit(self.__handle, item)
+                item: Optional[Tuple[Connection, Any]] = self.connection_storage.get_msg_from_available_conn_queue()
+                if item:
+                    self.executor.submit(self.__handle, item)
         except Exception as e:
             logger.error(f"Error in poll data: {traceback.format_exc()}")
             stop_event.set()
