@@ -9,21 +9,23 @@ from typing import Dict, Set, Any, Tuple, Optional
 class ConnectionStorage:
     def __init__(self, max_size: int=100):
         self.storage: Set[Connection] = set()
-        self.max_size: int = max_size
+        self.max_size: Optional[int] = max_size
         self.exist_in_queue: Dict[Connection, bool] = {}
         self.available_conns: queue.Queue = queue.Queue()
         self.stop_flag: threading.Event = None
         self.storage_lock = threading.RLock()
         self.__closed = False
+        self._selector: Optional[SelectSelector] = SelectSelector()
 
     def add(self, conn: Connection) -> int:
         if self.__closed:
             return 1
-        if len(self.storage) >= self.max_size:
+        if self.max_size is not None and len(self.storage) >= self.max_size:
             logger.warning(f"connection storage is full(size={len(self.storage)})")
             return 2
         with self.storage_lock:
             self.storage.add(conn)
+            self._selector.register(conn, EVENT_READ)
             self.exist_in_queue[conn] = False
         return 0
 
@@ -34,6 +36,7 @@ class ConnectionStorage:
                     return
                 
                 self.storage.remove(conn)
+                self._selector.unregister(conn)
                 del self.exist_in_queue[conn]
                 if not conn.closed:
                     conn.close()
@@ -47,6 +50,7 @@ class ConnectionStorage:
                     return
                 conn.send(f"ok#fileno:{conn.fileno()}")
                 self.storage.remove(conn)
+                self._selector.unregister(conn)
                 del self.exist_in_queue[conn]
                 if not conn.closed:
                     conn.close()
@@ -56,7 +60,7 @@ class ConnectionStorage:
     def init_stop_flag(self, stop_flag: threading.Event):
         self.stop_flag = stop_flag
 
-    def get_msg_from_available_conn_queue(self, timeout: float=0.1) -> Optional[Tuple[Connection, Any]]:
+    def get_msg_from_available_conn_queue(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
         while not self.stop_flag.is_set():
             try:
                 conn: Connection = self.available_conns.get(timeout=timeout)
@@ -96,6 +100,28 @@ class ConnectionStorage:
                 self.__closed = True
 
     def poll(self):
+        assert self.stop_flag is not None
+        try:
+            while not self.stop_flag.is_set():
+                with self.storage_lock:
+                    ready = self._selector.select(timeout=0.01) # 阻塞, 直到有连接可读
+                    for key, events in ready:
+                        conn = key.fileobj
+                        if not self.exist_in_queue.get(conn, False):
+                            logger.debug(f"connection is polled: {conn.poll()}, fileno: {conn.fileno()}, exist in queue: {self.exist_in_queue}")
+                            self.available_conns.put(conn)
+                            self.exist_in_queue[conn] = True
+                time.sleep(0)
+        except Exception as e:
+            logger.error(f"Error in poll: {traceback.format_exc()}")
+        finally:
+            self.__close_conns()
+            self.__close_selector()
+            self.__close_executor()
+            self.stop_flag.set()
+    
+    def poll2(self):
+        # 这种方式太低效了, 不采用
         assert self.stop_flag is not None
         try:
             while not self.stop_flag.is_set():
