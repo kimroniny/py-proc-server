@@ -1,0 +1,13 @@
+#!/bin/bash
+
+
+
+# Start Generation Here
+if [ -z "$1" ]; then
+    echo "Usage: $0 your_script.py"
+    exit 1
+fi
+
+ARGUMENT=$1
+
+docker run --rm -v $(pwd):/app python_3_13_nogil:latest python3 $ARGUMENT
