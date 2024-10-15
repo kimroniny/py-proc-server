@@ -9,7 +9,6 @@ import time
 import threading
 from loguru import logger
 from typing import Dict
-from example.api_service import MyHandler
 from example.application_response import StandardResponse
 
 class MyAsyncHandler(tornado.web.RequestHandler):
