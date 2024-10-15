@@ -7,17 +7,18 @@ from typing import List
 from loguru import logger
 from client.client import Client
 from service.api_service import ApiService
+from tests.large_scale.process_server.calc_handler import CalcHandler
 from multiprocessing.synchronize import Event as ProcessEventType
 from multiprocessing import Process, Event as ProcessEvent
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 multiprocessing.set_start_method('fork')
 
-NUM_API_SERVICES = 2
+NUM_API_SERVICES = 10
 NUM_WORKERS_PER_API_SERVICE = 25 
 NUM_CLIENTS = NUM_API_SERVICES
 # NUM_CLIENTS = 1
-NUM_REQUESTS_PER_CLIENT = 2
+NUM_REQUESTS_PER_CLIENT = 200
 NUM_THREADS_PER_CLIENT = 25
 CALC_TARGET = 1000
 
@@ -35,7 +36,7 @@ def start_api_services():
     def start_single_api_service(i, stop_event: ProcessEventType, socket_path: str):
         args = {}
         max_workers = NUM_WORKERS_PER_API_SERVICE
-        api_service = ApiService(socket_path, max_workers)
+        api_service = ApiService([CalcHandler], socket_path, max_workers)
         listen_thread = threading.Thread(target=listen_stop_proc_event, args=(stop_event, api_service))
         listen_thread.start()
         api_service.run(args)
