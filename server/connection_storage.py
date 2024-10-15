@@ -113,12 +113,15 @@ class ConnectionStorage:
                 try:
                     logger.debug("waiting recv...")
                     msgs = []
+                    limit = 20 # 每次最多接收20条消息, 减少阻塞时间
                     while True:
                         r, _, _ = select.select([conn], [], [], 0.001)
                         if r:
                             msg = conn.recv()
                             msgs.append(msg)
                             logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
+                            if len(msgs) >= limit:
+                                break
                         else:
                             break
                     # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
