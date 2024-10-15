@@ -10,8 +10,9 @@ import traceback
 import os
 import socket   
 from loguru import logger
-from typing import List, Tuple, Dict, Any, TypeAlias, Optional
+from typing import List, Tuple, Dict, Any, TypeAlias, Optional, Iterator
 from multiprocessing.connection import Listener, Client, Connection, wait
+import selectors
 import signal
 from concurrent.futures import ThreadPoolExecutor
 from server.response import Response
@@ -33,6 +34,7 @@ class ServerMS:
         self.max_workers = max_workers or multiprocessing.cpu_count() * 2  # 设置线程池大小
         self.connection_storage = ConnectionStorage(max_size=max_conns or self.max_workers)
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
+        self._selector = selectors.SelectSelector()
 
     def __setup(self, socket_paths: List[str], stop_event: threading.Event) -> bool:
         if not isinstance(socket_paths, list):
@@ -47,16 +49,19 @@ class ServerMS:
                 return False
         self.servers = [Listener(family='AF_UNIX', address=socket_path) for socket_path in socket_paths]
         self._sockets = [server._listener._socket for server in self.servers]
+        for socket in self._sockets:
+            self._selector.register(socket, selectors.EVENT_READ)
         self.connection_storage.init_stop_flag(stop_event)
         logger.debug(f"服务器正在监听 {socket_paths}")
         return True
     
     def __wait_socket_accept(self) -> List[Connection]:
-        readable_sockets = wait(self._sockets, timeout=0.01)
+        readable_sockets = self._selector.select(timeout=0.01)
         readable_conns: List[Connection] = []
-        for idx, socket in enumerate(readable_sockets):
+        for idx, (key, event) in enumerate(readable_sockets):
             try:
-                conn, self.servers[idx]._listener._last_accepted = socket.accept()
+                socketobj: socket.socket = key.fileobj
+                conn, self.servers[idx]._listener._last_accepted = socketobj.accept()
                 conn.setblocking(True)
                 readable_conns.append(Connection(conn.detach()))
                 logger.debug(f"accept connection: {conn.fileno()}")
@@ -88,16 +93,26 @@ class ServerMS:
             logger.error(f"Error in listen accept: {traceback.format_exc()}")
         finally:
             stop_event.set()
-            logger.info("服务器已关闭")
+            logger.debug("服务器已关闭")
     
     def __poll_data(self, stop_event: threading.Event):
         thread_poll = threading.Thread(target=self.connection_storage.poll)
         thread_poll.start()
         try:
             while not stop_event.is_set():
-                item: Optional[Tuple[Connection, Any]] = self.connection_storage.get_msg_from_available_conn_queue()
+                item: Optional[List[Optional[Tuple[Connection, Any]]]] = self.connection_storage.get_msg_from_available_conn_queue()
                 if item:
-                    self.executor.submit(self.__handle, item)
+                    if isinstance(item, List):
+                        # print("item is Iterator")
+                        for i in item:
+                            if i: 
+                                conn, msgs = i
+                                for msg in msgs:
+                                    self.executor.submit(self.__handle, (conn, msg))
+                    else:
+                        # print("item is not Iterator")
+                        self.executor.submit(self.__handle, item)
+                time.sleep(0)
         except Exception as e:
             logger.error(f"Error in poll data: {traceback.format_exc()}")
             stop_event.set()
