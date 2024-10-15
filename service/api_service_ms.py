@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Dict, Optional, List
 from server.server_ms import ServerMS, Handler
+from server.server_ms_thread_wrapper import ServerMSThreadWrapper
 from loguru import logger
 from typing import Dict
 
@@ -17,13 +18,13 @@ class ApiService(object):
         self.max_conns = max_conns
         self.stop_event: threading.Event = None
 
-    def make_server(self, args: Dict = None) -> ServerMS:
+    def make_server(self, args: Dict = None) -> ServerMSThreadWrapper:
         if args is None:
             args = {}
         routes = []
         for handler in self.handlers:
             routes += [(route, handler, args) for route in handler.routers().keys()]
-        return ServerMS(routes, max_workers=self.max_workers, max_conns=self.max_conns)
+        return ServerMSThreadWrapper(routes, max_workers=self.max_workers, max_conns=self.max_conns)
 
     async def run_app(self, args: Dict = None):
         if args is None:
