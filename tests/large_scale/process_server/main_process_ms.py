@@ -3,6 +3,7 @@ import threading
 import sys
 import traceback
 import multiprocessing
+import cProfile
 from typing import List
 from loguru import logger
 from client.client_ms import ClientMS
@@ -10,17 +11,18 @@ from tests.large_scale.process_server.calc_handler import CalcHandler
 from service.api_service_ms import ApiService as ApiServiceMS
 from multiprocessing.synchronize import Event as ProcessEventType
 from multiprocessing import Process, Event as ProcessEvent
+from multiprocessing import Manager
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 multiprocessing.set_start_method('fork')
 
-NUM_API_SERVICES = 20
-NUM_MULTI_SOCKET = 1
+NUM_API_SERVICES = 1
+NUM_MULTI_SOCKET = 5
 NUM_WORKERS_PER_API_SERVICE = 25 
 NUM_MAX_CONNS = 100000
-NUM_CLIENTS = NUM_API_SERVICES
-# NUM_CLIENTS = 1
-NUM_REQUESTS_PER_CLIENT = 1000
+# NUM_CLIENTS = NUM_API_SERVICES
+NUM_CLIENTS = 800
+NUM_REQUESTS_PER_CLIENT = 500
 NUM_THREADS_PER_CLIENT = 25
 CALC_TARGET = 1000
 
@@ -65,9 +67,10 @@ def send_requests(socket_paths: List[List[str]]):
     def single_client_to_single_api_service(client: ClientMS):
         cnt = 0
         try:
+            data = {'target': CALC_TARGET, 'text': 'hello world'*10000}
             for i in range(NUM_REQUESTS_PER_CLIENT):
                 cnt += 1
-                resp = client.post('/calc', {'target': CALC_TARGET})
+                resp = client.post('/calc', data)
                 # time.sleep(0.001)
                 if resp.code != 200:
                     logger.error(resp.err)
@@ -82,8 +85,18 @@ def send_requests(socket_paths: List[List[str]]):
     def send_requests_from_single_client(client_id: int):
         clients = []
         for socket_paths_each_api_service in socket_paths:
-            client = ClientMS(socket_paths_each_api_service)
+            socket_paths_for_client = [socket_paths_each_api_service[client_id % len(socket_paths_each_api_service)]]
+            client = ClientMS(socket_paths_for_client)
             clients.append(client)
+        
+        # 所有client进程在这里要同步, 然后再测试后面的发请求性能
+        # with lock:
+        #     proc_val.value += 1
+        
+        # while True:
+        #     if proc_val.value >= NUM_CLIENTS:
+        #         break
+        #     time.sleep(0.01)
 
         start_time = time.time()
         with ThreadPoolExecutor(max_workers=NUM_THREADS_PER_CLIENT) as executor:
@@ -92,9 +105,14 @@ def send_requests(socket_paths: List[List[str]]):
                 futures.append(executor.submit(single_client_to_single_api_service, client))
             wait_futures(futures)
         end_time = time.time()
-        print(f"time taken({client_id}): {end_time - start_time}")
+        cost = end_time - start_time
+        print(f"time taken({client_id}): {cost}")
+        proc_queue.put(cost)
 
     processes = []
+    proc_queue = multiprocessing.Queue()
+    # proc_val = multiprocessing.Value('i', 0)
+    # lock = multiprocessing.Lock()
     for idx in range(NUM_CLIENTS):
         p = Process(target=send_requests_from_single_client, args=(idx,), name=f"process-{idx}")
         p.start()
@@ -102,8 +120,15 @@ def send_requests(socket_paths: List[List[str]]):
 
     for p in processes:
         p.join()
-
-
+    
+    # analysis
+    costs = []
+    while not proc_queue.empty():
+        cost = proc_queue.get()
+        costs.append(cost)
+    
+    print(f"costs: {costs}")
+    print(f"mean: {sum(costs) / len(costs)}")
 if __name__ == "__main__":
     processes, process_events, socket_paths = start_api_services()
     time.sleep(1)
