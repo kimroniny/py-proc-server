@@ -9,7 +9,7 @@ import multiprocessing
 import traceback
 import os
 from loguru import logger
-from typing import List, Tuple, Dict, Any, TypeAlias, Optional
+from typing import List, Tuple, Dict, Any, Optional
 from multiprocessing.connection import Listener, Client, Connection
 import signal
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +18,7 @@ from server.handler import Handler
 from server.connection_storage import ConnectionStorage
 
 
-Route: TypeAlias = Tuple[str, Handler, Dict[str, Any]]
+Route = Tuple[str, Handler, Dict[str, Any]]
 
 class Server:
     def __init__(self, routes: List[Route], max_workers: Optional[int]=None, max_conns: Optional[int]=None):
