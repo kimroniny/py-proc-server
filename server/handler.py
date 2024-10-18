@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import List, Dict, Any, TypeAlias
+from typing import List, Dict, Any, Union, get_args
 from server.response import Response
 from abc import ABC, abstractmethod
-ResponseContent: TypeAlias = str | bytes
+ResponseContent = Union[str, bytes]
 
 class Handler(ABC):
     def __init__(self, url: str, method: str, arguments: Dict[str, Any]):
@@ -27,7 +27,7 @@ class Handler(ABC):
         return self.__output
     
     def write(self, content: ResponseContent):
-        assert isinstance(content, ResponseContent)
+        assert isinstance(content, get_args(ResponseContent))
         self.__output = content
 
     def initialize(self, *args, **kwargs):
