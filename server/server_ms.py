@@ -10,7 +10,7 @@ import traceback
 import os
 import socket   
 from loguru import logger
-from typing import List, Tuple, Dict, Any, TypeAlias, Optional, Iterator
+from typing import List, Tuple, Dict, Any, Optional, Iterator
 from multiprocessing.connection import Listener, Client, Connection, wait
 import selectors
 import signal
@@ -19,7 +19,7 @@ from server.response import Response
 from server.handler import Handler
 from server.connection_storage import ConnectionStorage
 
-Route: TypeAlias = Tuple[str, Handler, Dict[str, Any]]
+Route = Tuple[str, Handler, Dict[str, Any]]
 
 class ListenerWrapper(Listener):
     def __init__(self, *args, **kwargs):
@@ -31,8 +31,8 @@ class ListenerWrapper(Listener):
 class ServerMS:
     def __init__(self, routes: List[Route], max_workers: Optional[int]=None, max_conns: Optional[int]=None):
         self.routes_map: dict[str, Tuple[Handler, Dict[str, Any]]] = {url: (handler, args) for url, handler, args in routes}
-        self.max_workers = max_workers or multiprocessing.cpu_count() * 2  # 设置线程池大小
-        self.connection_storage = ConnectionStorage(max_size=max_conns or self.max_workers)
+        self.max_workers = max_workers or min(multiprocessing.cpu_count() * 2, 32)  # 设置线程池大小, 用于并发处理收到的请求消息, 最大为32, 除非指定最大值
+        self.connection_storage = ConnectionStorage(max_size=max_conns)
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
         self._selector = selectors.SelectSelector()
 
@@ -167,7 +167,7 @@ class ServerMS:
             params = data.get('params', {})
             Handler, args = self.routes_map[url]
             handler = Handler(url=url, method=method, arguments=params)
-            handler.initialize(*args)
+            handler.initialize(**args)
             if method == 'GET':
                 handler.get()
             elif method == 'POST':
@@ -179,7 +179,7 @@ class ServerMS:
         except Exception as e:
             resp.code = 500
             resp.err = str(e)
-            logger.error(f"process data error: {e}")
+            logger.error(f"process data error: {traceback.format_exc()}")
         finally:
             logger.debug(f"process data return before del: {resp}")
             if handler:
