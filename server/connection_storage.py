@@ -6,7 +6,7 @@ import math
 import select
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
-from selectors import SelectSelector, EVENT_READ
+from selectors import SelectSelector, EVENT_READ, EpollSelector
 from loguru import logger
 from multiprocessing.connection import Connection, wait
 from typing import Dict, Set, Any, Tuple, Optional
@@ -20,6 +20,7 @@ class ConnectionStorage:
         self.stop_flag: threading.Event = None
         self.storage_lock = threading.RLock()
         self.__closed = False
+        # self._selector: Optional[SelectSelector] = EpollSelector()
         self._selector: Optional[SelectSelector] = SelectSelector()
         self._executor_recv_msgs = ThreadPoolExecutor()
 
@@ -113,17 +114,31 @@ class ConnectionStorage:
                 try:
                     logger.debug("waiting recv...")
                     msgs = []
-                    limit = 20 # 每次最多接收20条消息, 减少阻塞时间
+                    msg = conn.recv()
+                    msgs.append(msg)
+                    # limit = 20 # 每次最多接收20条消息, 减少阻塞时间
+                    limit = 20
                     while True:
-                        r, _, _ = select.select([conn], [], [], 0.001)
-                        if r:
+                        if len(msgs) >= limit:
+                            break
+                        
+                        # # 方案 1: 使用 select 去筛选
+                        # r, _, _ = select.select([conn], [], [], 0.001)
+                        # if r:
+                        #     msg = conn.recv()
+                        #     msgs.append(msg)
+                        #     logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
+                        # else:
+                        #     break
+
+                        # 方案2: 尝试 recv()
+                        try:
                             msg = conn.recv()
                             msgs.append(msg)
                             logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
-                            if len(msgs) >= limit:
-                                break
-                        else:
+                        except EOFError:
                             break
+
                     # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
                     self.exist_in_queue[conn] = False 
                     logger.debug(f"recv msg(total {len(msgs)}) from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
