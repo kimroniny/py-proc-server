@@ -3,12 +3,14 @@ import json
 from typing import Dict
 
 class StandardResponse(object):
-    code: int = 199
+    code: int = 404
     msg: str = ""
     error: str = ""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, code: int = 404, msg: str = "", error: str = "") -> None:
+        self.code = code
+        self.msg = msg
+        self.error = error
 
     def set_code(self, code: int) -> StandardResponse:
         self.code = code
@@ -27,3 +29,6 @@ class StandardResponse(object):
     
     def as_str(self) -> str:
         return json.dumps(self.as_json())
+    
+    def from_str(self, json_str: str) -> StandardResponse:
+        return StandardResponse(**json.loads(json_str))
