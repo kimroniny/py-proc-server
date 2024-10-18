@@ -1,13 +1,14 @@
 #!/bin/bash
 
+# This script runs a Python script inside a Docker container.
+# It accepts the script file as the first argument and any additional command line arguments after that.
 
-
-# Start Generation Here
 if [ -z "$1" ]; then
-    echo "Usage: $0 your_script.py"
+    echo "Usage: $0 your_script.py [args...]"
     exit 1
 fi
 
 ARGUMENT=$1
 
-docker run --rm -v $(pwd):/app python_3_13_nogil:latest python3 $ARGUMENT
+# Run the Docker container with the specified Python script and pass any additional arguments to it.
+docker run --rm -v $(pwd):/app python_3_13_nogil:latest python3 $ARGUMENT "${@:2}"
