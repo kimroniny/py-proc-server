@@ -11,17 +11,21 @@ class ClientMS:
         self.__clients: List[Client] = [Client(socket_path, reuse_client=True) for socket_path in self.socket_paths]
 
     def get(self, url: str, params: Dict[str, Any]) -> Response:
-        return self.send(url, "GET", params)
+        return self._send(url, "GET", params)
 
     def post(self, url: str, params: Dict[str, Any]) -> Response:
-        return self.send(url, "POST", params)
+        return self._send(url, "POST", params)
     
     @property
     def __current_client(self) -> Client:
         return random.choice(self.__clients)
 
-    def send(self, url: str, method: str, params: Dict[str, Any]) -> Response:
+    def _send(self, url: str, method: str, params: Dict[str, Any]) -> Response:
         return self.__current_client.send(url, method, params)
+    
+    def close(self):
+        for client in self.__clients:
+            client.close()
     
     # def __del__(self):
     #     print("close all clients before")
