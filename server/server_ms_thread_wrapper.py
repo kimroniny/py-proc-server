@@ -15,9 +15,9 @@ class ServerMSThreadWrapper:
             server = ServerMS(*self._args, **self._kwargs)
             thread = threading.Thread(target=server.start, args=([socket_path], stop_event))
             thread.start()
-            logger.debug(f"start ServerMS: {socket_path}")
             threads.append(thread)
+        logger.debug(f"start ServerMS: {socket_paths}")
         for thread in threads:
             thread.join()
-        logger.info(f"all ServerMS stopped")
+        logger.debug(f"all ServerMS stopped")
         
