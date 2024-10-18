@@ -39,14 +39,16 @@ class Client:
         # print(f"收到服务器响应, code: {response.code}, msg: {response.msg}, err: {response.err}")
         return response
     
-    def __close(self, client: Connection):
+    def __close(self):
+        if not self.__client or self.__client.closed:
+            return
         try:
-            fileno = client.fileno()
+            fileno = self.__client.fileno()
             logger.debug(f"client(fileno: {fileno}) send close message to server")
-            client.send("close")
-            ack = client.recv()
+            self.__client.send("close")
+            ack = self.__client.recv()
             assert str(ack).startswith("ok#")
-            client.close()
+            self.__client.close()
             logger.debug(f"client(fileno: {fileno}) closed, recv from server: {ack}")
         except Exception as e:
             logger.error(f"Error closing client: {e}")
@@ -66,6 +68,8 @@ class Client:
         logger.debug(f"send request finish!")
         return response
     
+    def close(self):
+        self.__close()
+
     def __del__(self):
-        if self.__client:
-            self.__close(self.__client)
+        self.__close()
