@@ -30,12 +30,17 @@ class ApiService(object):
         if args is None:
             args = {}
         server = self.make_server(args)
-        self.stop_event = threading.Event()
+        self.stop_event = threading.Event() if not self.stop_event else self.stop_event
         server_thread = threading.Thread(target=server.start, args=(self.socket_paths, self.stop_event))
         server_thread.daemon = True
         server_thread.start()
         logger.info(f"api service({self.socket_paths}) is listening...")
-        self.stop_event.wait()
+        """
+        # self.stop_event.wait() # 使用 wait 会阻塞, 导致异步程序无法执行
+        """
+        while not self.stop_event.is_set():
+            await asyncio.sleep(1)
+        logger.info(f"api service stop event is set")
         server_thread.join()
         logger.info(f"api service({self.socket_paths}) stopped!")
 
