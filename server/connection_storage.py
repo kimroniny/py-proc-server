@@ -122,22 +122,22 @@ class ConnectionStorage:
                         if len(msgs) >= limit:
                             break
                         
-                        # # 方案 1: 使用 select 去筛选
-                        # r, _, _ = select.select([conn], [], [], 0.001)
-                        # if r:
-                        #     msg = conn.recv()
-                        #     msgs.append(msg)
-                        #     logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
-                        # else:
-                        #     break
-
-                        # 方案2: 尝试 recv()
-                        try:
+                        # 方案 1: 使用 select 去筛选
+                        r, _, _ = select.select([conn], [], [], 0.001)
+                        if r:
                             msg = conn.recv()
                             msgs.append(msg)
                             logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
-                        except EOFError:
+                        else:
                             break
+
+                        # # 方案2: 尝试 recv()
+                        # try:
+                        #     msg = conn.recv()
+                        #     msgs.append(msg)
+                        #     logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
+                        # except EOFError:
+                        #     break
 
                     # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
                     self.exist_in_queue[conn] = False 
