@@ -11,4 +11,4 @@ fi
 ARGUMENT=$1
 
 # Run the Docker container with the specified Python script and pass any additional arguments to it.
-docker run --rm -v $(pwd):/app python_3_13_nogil:latest python3 $ARGUMENT "${@:2}"
+docker run --rm --name python_3_13_nogil -v $(pwd):/app python_3_13_nogil:latest python3 $ARGUMENT "${@:2}"
