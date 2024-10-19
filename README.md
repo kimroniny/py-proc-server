@@ -21,6 +21,13 @@ Environment="HTTP_PROXY=http://10.210.136.63:7890"
 Environment="HTTPS_PROXY=http://10.210.136.63:7890"
 ```
 
+重启docker使配置生效
+
+```
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
 ### 构建镜像
 
 ```
