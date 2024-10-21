@@ -128,7 +128,7 @@ def send_requests(socket_paths: List[List[str]]):
         costs.append(cost)
     
     print(f"costs: {costs}")
-    print(f"mean: {sum(costs) / len(costs)}")
+    print(f"mean: {sum(costs) / len(costs) if costs else 0}")
 if __name__ == "__main__":
     processes, process_events, socket_paths = start_api_services()
     time.sleep(1)
