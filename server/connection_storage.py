@@ -1,4 +1,5 @@
 import queue
+import sys
 import threading
 import time
 import traceback
@@ -6,7 +7,7 @@ import math
 import select
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
-from selectors import SelectSelector, EVENT_READ, EpollSelector
+from selectors import SelectSelector, EVENT_READ, EpollSelector, PollSelector
 from loguru import logger
 from multiprocessing.connection import Connection, wait
 from typing import Dict, Set, Any, Tuple, Optional
@@ -20,8 +21,9 @@ class ConnectionStorage:
         self.stop_flag: threading.Event = None
         self.storage_lock = threading.RLock()
         self.__closed = False
-        # self._selector: Optional[SelectSelector] = EpollSelector()
-        self._selector: Optional[SelectSelector] = SelectSelector()
+        self._selector: Optional[PollSelector] = PollSelector()
+        # self._selector: Optional[EpollSelector] = EpollSelector()
+        # self._selector: Optional[SelectSelector] = SelectSelector()
         self._executor_recv_msgs = ThreadPoolExecutor()
 
     def add(self, conn: Connection) -> int:
@@ -32,6 +34,7 @@ class ConnectionStorage:
             return 2
         with self.storage_lock:
             self.storage.add(conn)
+            # print(f"size of storage: {sys.getsizeof(self.storage)}, size of exist_in_queue: {sys.getsizeof(self.exist_in_queue)}")
             self._selector.register(conn, EVENT_READ)
             self.exist_in_queue[conn] = False
         return 0
@@ -65,25 +68,25 @@ class ConnectionStorage:
     def init_stop_flag(self, stop_flag: threading.Event):
         self.stop_flag = stop_flag
 
-    def get_msg_from_available_conn_queue2(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
+    def get_msg_from_available_conn_queue(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
         """
         在连接数大于500时, 使用该方法效果不行, 在连接数小于500时, 效果还可以, 和下面的方法相比, 相差很小
         """
         while not self.stop_flag.is_set():
             try:
-                conn: Connection = self.available_conns.get(timeout=timeout)
+                conn: Connection = self.available_conns.get(block=False)
             except queue.Empty:
                 return None
 
             with self.storage_lock:
                 if conn in self.storage and not conn.closed:
-                    logger.debug(f"connection is polled: {conn.poll()}, available obj: {wait([conn])}, closed: {conn.closed}, fileno: {conn.fileno()}")
+                    # logger.debug(f"connection is polled: {conn.poll()}, available obj: {wait([conn])}, closed: {conn.closed}, fileno: {conn.fileno()}")
                     try:
-                        logger.debug("waiting recv...")
+                        # logger.debug("waiting recv...")
                         msg = conn.recv()
                         # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
                         self.exist_in_queue[conn] = False 
-                        logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
+                        # logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
                         return conn, msg
                     except EOFError:
                         # 客户端关闭连接时, conn.poll() 也会收到通知, 但是消息为空, 此时只能通过捕获 EOFError 异常来判断
@@ -96,7 +99,7 @@ class ConnectionStorage:
                     continue
         return None
 
-    def get_msg_from_available_conn_queue(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
+    def get_msg_from_available_conn_queue2(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
         """
         适用于大规模连接的情况, 在连接数大于500时, 效果比 get_msg_from_available_conn_queue2 好
         但是优势有限, 仅10%左右
@@ -110,14 +113,14 @@ class ConnectionStorage:
 
         def recv_msgs_from_conns(conn: Connection):
             if conn in self.storage and not conn.closed:
-                logger.debug(f"connection is polled: {conn.poll()}, available obj: {wait([conn])}, closed: {conn.closed}, fileno: {conn.fileno()}")
+                # logger.debug(f"connection is polled: {conn.poll()}, available obj: {wait([conn])}, closed: {conn.closed}, fileno: {conn.fileno()}")
                 try:
-                    logger.debug("waiting recv...")
+                    # logger.debug("waiting recv...")
                     msgs = []
                     msg = conn.recv()
                     msgs.append(msg)
                     # limit = 20 # 每次最多接收20条消息, 减少阻塞时间
-                    limit = 20
+                    limit = 1
                     while True:
                         if len(msgs) >= limit:
                             break
@@ -127,7 +130,7 @@ class ConnectionStorage:
                         if r:
                             msg = conn.recv()
                             msgs.append(msg)
-                            logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
+                            # logger.debug(f"recv msg: {msg} from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
                         else:
                             break
 
@@ -141,7 +144,7 @@ class ConnectionStorage:
 
                     # 从conn中接收完所有消息后, 才可以设置为 false, 此时 poll 线程才可以重新将 conn 加入到 available_conns 队列中
                     self.exist_in_queue[conn] = False 
-                    logger.debug(f"recv msg(total {len(msgs)}) from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
+                    # logger.debug(f"recv msg(total {len(msgs)}) from connection(fileno: {conn.fileno()}), conn: {conn}, conn.poll: {conn.poll()}")
                     return conn, msgs
                 except EOFError:
                     # 客户端关闭连接时, conn.poll() 也会收到通知, 但是消息为空, 此时只能通过捕获 EOFError 异常来判断
@@ -183,14 +186,15 @@ class ConnectionStorage:
         try:
             while not self.stop_flag.is_set():
                 with self.storage_lock:
-                    ready = self._selector.select(timeout=0.01) # 阻塞, 直到有连接可读
+                    ready = self._selector.select(timeout=0) # 阻塞, 直到有连接可读
                     for key, events in ready:
                         conn = key.fileobj
                         if not self.exist_in_queue.get(conn, False):
-                            logger.debug(f"connection is polled: {conn.poll()}, fileno: {conn.fileno()}, exist in queue: {self.exist_in_queue}")
+                            # logger.debug(f"connection is polled: {conn.poll()}, fileno: {conn.fileno()}, exist in queue: {self.exist_in_queue}")
                             self.available_conns.put(conn)
                             self.exist_in_queue[conn] = True
-                time.sleep(0)
+                    pass
+                time.sleep(0.01)
         except Exception as e:
             logger.error(f"Error in poll: {traceback.format_exc()}")
         finally:
@@ -207,7 +211,7 @@ class ConnectionStorage:
                 with self.storage_lock:
                     for conn in self.storage:
                         if not self.exist_in_queue.get(conn, False) and conn.poll(): # 先判断是否在队列中, 再判断是否可读
-                            logger.debug(f"connection is polled: {conn.poll()}, fileno: {conn.fileno()}, exist in queue: {self.exist_in_queue}")
+                            # logger.debug(f"connection is polled: {conn.poll()}, fileno: {conn.fileno()}, exist in queue: {self.exist_in_queue}")
                             self.available_conns.put(conn)
                             self.exist_in_queue[conn] = True
                 time.sleep(0)
