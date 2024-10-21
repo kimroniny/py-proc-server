@@ -34,7 +34,7 @@ class ServerMS:
         self.max_workers = max_workers or min(multiprocessing.cpu_count() * 2, 32)  # 设置线程池大小, 用于并发处理收到的请求消息, 最大为32, 除非指定最大值
         self.connection_storage = ConnectionStorage(max_size=max_conns)
         self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
-        self._selector = selectors.SelectSelector()
+        self._selector = selectors.EpollSelector()
 
     def __setup(self, socket_paths: List[str], stop_event: threading.Event) -> bool:
         if not isinstance(socket_paths, list):
@@ -56,7 +56,7 @@ class ServerMS:
         return True
     
     def __wait_socket_accept(self) -> List[Connection]:
-        readable_sockets = self._selector.select(timeout=0.01)
+        readable_sockets = self._selector.select(timeout=0.001)
         readable_conns: List[Connection] = []
         for idx, (key, event) in enumerate(readable_sockets):
             try:
@@ -150,7 +150,7 @@ class ServerMS:
             response = self.__process_data(data)
             resp_str = response.to_str()
             conn.send(resp_str)
-            logger.debug(f"send response: {resp_str}")
+            # logger.debug(f"send response: {resp_str}")
         except Exception as e:
             logger.error(f"Error in handling connection: {traceback.format_exc()}")
         finally:
@@ -181,10 +181,10 @@ class ServerMS:
             resp.err = str(e)
             logger.error(f"process data error: {traceback.format_exc()}")
         finally:
-            logger.debug(f"process data return before del: {resp}")
+            # logger.debug(f"process data return before del: {resp}")
             if handler:
                 del handler
-            logger.debug(f"process data return: {resp}")
+            # logger.debug(f"process data return: {resp}")
             return resp
         
     def start(self, socket_paths: List[str], stop_event: threading.Event):
