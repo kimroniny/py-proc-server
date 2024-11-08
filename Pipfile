@@ -7,6 +7,7 @@ name = "pip_conf_index_global"
 loguru = "*"
 tornado = "*"
 requests = "*"
+numpy = "*"
 
 [dev-packages]
 
