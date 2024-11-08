@@ -68,7 +68,7 @@ class ConnectionStorage:
     def init_stop_flag(self, stop_flag: threading.Event):
         self.stop_flag = stop_flag
 
-    def get_msg_from_available_conn_queue(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
+    def get_msg_from_available_conn_queue2(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
         """
         在连接数大于500时, 使用该方法效果不行, 在连接数小于500时, 效果还可以, 和下面的方法相比, 相差很小
         """
@@ -99,7 +99,7 @@ class ConnectionStorage:
                     continue
         return None
 
-    def get_msg_from_available_conn_queue2(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
+    def get_msg_from_available_conn_queue(self, timeout: float=0.01) -> Optional[Tuple[Connection, Any]]:
         """
         适用于大规模连接的情况, 在连接数大于500时, 效果比 get_msg_from_available_conn_queue2 好
         但是优势有限, 仅10%左右
